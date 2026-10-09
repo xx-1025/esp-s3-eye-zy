@@ -113,6 +113,26 @@ def http_json(url, payload=None, token=None, timeout=3):
         return r.status, json.loads(r.read().decode('utf-8'))
 
 
+def guess_fw():
+    """从 firmware/include/config.h 里读 FW_VERSION，当默认值用。
+
+    为什么要这么做：板子重启后那行 `[BOOT] fw=... dev=...` 是开机瞬间打印的，
+    桥接脚本开串口时通常已经错过了（USB CDC 在没人监听时会把数据丢掉），
+    所以干脆从源码里取版本号——它本来就是编译期常量，不会错。
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    cfg = os.path.join(os.path.dirname(here), 'firmware', 'include', 'config.h')
+    try:
+        with open(cfg, encoding='utf-8') as fh:
+            for line in fh:
+                m = re.match(r'\s*#define\s+FW_VERSION\s+"([^"]+)"', line)
+                if m:
+                    return m.group(1)
+    except Exception:                                          # noqa: BLE001
+        pass
+    return 'unknown'
+
+
 def server_alive(base):
     try:
         http_json(base.rstrip('/') + '/api/health', timeout=1.5)
@@ -167,6 +187,8 @@ def main():
                     help='设备 ID 兜底值（若抓到板子开机日志里的 dev= 会优先用那个）')
     ap.add_argument('--sensor', default='QMA6100P',
                     help='传感器型号（写进记录供页面显示，默认按本组板子填）')
+    ap.add_argument('--fw', default='',
+                    help='固件版本（留空则自动从 firmware/include/config.h 里读）')
     ap.add_argument('-s', '--seconds', type=float, default=0, help='桥接秒数，0=一直跑（默认）')
     ap.add_argument('--with-server', action='store_true', help='顺带把服务端也起起来')
     ap.add_argument('--open', action='store_true', help='顺带打开浏览器')
@@ -179,7 +201,7 @@ def main():
     ser = None
 
     device_id = args.device
-    fw = 'unknown'
+    fw = args.fw or guess_fw()
     sensor = args.sensor
     sent = 0
     failed = 0
@@ -190,7 +212,7 @@ def main():
     # 本板是 ESP32-S3 原生 USB，手工玩控制线会把板子打进下载模式。
     # 想拿板子的 device_id / fw，先跑 read_serial.py --watch，再按一下板子上的 RST 键。
     print(f'# 桥接中：{args.port} → {args.server}/api/ingest')
-    print(f'# device_id={device_id}  sensor={sensor}（可用 --device / --sensor 改）')
+    print(f'# device_id={device_id}  sensor={sensor}  fw={fw}')
     print(f'# 板子不用改任何配置；按 Ctrl+C 结束\n')
 
     buf = b''

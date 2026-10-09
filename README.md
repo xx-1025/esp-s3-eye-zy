@@ -35,6 +35,8 @@ esp32-sensor-web/
 │   ├── read_serial.py            读串口日志（--watch 实时监控）
 │   ├── record_csv.py             把串口 [DATA] 录成 CSV → samples/（交作业用）
 │   ├── serial_bridge.py          串口 → HTTP 桥接（板子不联网也能喂数据给网页）
+│   ├── board_reset.py            ★ 板子"串口没输出"时用它：完整复位救回正常运行
+│   ├── board_status.py           看芯片进了什么启动模式（正常/下载模式）
 │   └── cpp_lint.js               固件结构自检（没有编译器时也能查括号/引号配平）
 ├── samples/                      record_csv.py 的输出目录（自动创建）
 ├── deploy/
@@ -114,10 +116,26 @@ python ../tools/read_serial.py -p COM4 -s 16
 | 抓开机日志 | 先跑 `--watch`，再按一下板子上的 **RST** 键 | 从 `[BOOT]` 开始完整抓 |
 | **录成 CSV**（交作业用） | `python tools/record_csv.py -p COM4 -s 30` | 录 30 秒 → `samples/board_<时间>.csv` |
 
-> ⚠️ **别用代码做"软复位"。** ESP32-S3 走的是原生 USB（USB-Serial/JTAG），DTR/RTS 在芯片内部
-> 直连 EN 和 GPIO0。网上常见的那套复位时序（`DTR 拉低 → RTS 拉高`）是给 USB-UART 板子用的，
-> 对 S3 会把芯片**顶进下载模式** —— 之后串口一个字都不输出，得重烧固件或拔插 USB 才能恢复。
-> 本工程所有脚本都已避开这个操作；要复位就按板子上的 RST 键。
+> ⚠️ **串口一个字都不输出？先跑这一条**（本工程踩过的最大的坑）：
+>
+> ```bash
+> python tools/board_reset.py -p COM4
+> ```
+>
+> **原因**：ESP32-S3 走原生 USB（USB-Serial/JTAG），它的 **DTR/RTS 是低有效信号**（`True` = 0V）：
+> `DTR` 对应 **GPIO0(BOOT)**、`RTS` 对应 **EN(复位)**。而 pyserial 打开串口时**默认把两条线都置 `True`**
+> —— 等于同时"拉低 GPIO0 + 复位"，芯片就进**下载模式**了。
+>
+> **更坑的是**：USB-JTAG 发出的复位**不一定能重新采样启动引脚**（官方文档明确提到这点）。
+> 所以芯片一旦进了下载模式，再用 DTR/RTS 怎么复位都回不来 —— 串口只会打印一行
+> `boot:0x22 (DOWNLOAD(USB/UART0))` / `waiting for download`，然后全黑，看着像死机。
+> （用 `python tools/board_status.py -p COM4` 可以直接看到这个启动模式。）
+>
+> **解法**：做一次**完整复位**（会重新采样 GPIO0）。`board_reset.py` 调用 esptool 的
+> `--after watchdog_reset` 完成这件事，实测一秒恢复。兜底手段：按一下板子上的 **RST** 键，或拔插一次 USB。
+>
+> 本工程所有脚本打开串口时都**不碰 DTR/RTS**，桥接脚本还带**掉线自动重连**
+> （板子复位/USB 重新枚举时不会崩，等设备回来自动接上）。
 
 CSV 列：`seq, x_g, y_g, z_g, mag_g, roll_deg, pitch_deg, state, pc_time`，
 可直接当"一条真实观测对应记录"提交。（`--watch` 可一直录到 `Ctrl+C`，已录部分自动保留。）
@@ -398,6 +416,8 @@ sudo ufw allow 8080/tcp
 
 | 现象 | 原因 | 怎么修 |
 |---|---|---|
+| **串口一个字都没有**，或只有 `boot:0x22 (DOWNLOAD...)` / `waiting for download` | 芯片被顶进**下载模式**（见 1.5 节那条警告）；USB-JTAG 的复位回不到正常启动 | **`python tools/board_reset.py -p COM4`**（watchdog 完整复位）；兜底：按 RST 键 / 拔插 USB。用 `tools/board_status.py` 可确认启动模式 |
+| 读串口时报 `ClearCommError failed (PermissionError(13, ...))` | 板子复位或 USB 重新枚举，旧句柄当场作废 | 本工程的桥接脚本会**自动重连**；自己写脚本记得捕获异常后重开串口。多半是有人插拔了 USB 或板子在复位 |
 | `pio device monitor` 一片乱码 | 波特率不对 | 加 `-b 115200`；ESP32-S3-EYE 还要确认 `ARDUINO_USB_CDC_ON_BOOT=1` |
 | 烧录报 `Failed to connect` | 没进下载模式 / 串口被占用 | 按住 BOOT 再按 RST 松开，然后重新 upload；关掉其他串口工具 |
 | S3-EYE 烧完不停重启 | 板子没有 USB-UART 桥接，出问题后难进下载模式 | 按住 BOOT 上电再烧；确认 `board_build.arduino.memory_type = qio_opi` |

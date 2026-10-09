@@ -145,22 +145,40 @@ pio device monitor -e esp32s3eye -b 115200
 
 （VS Code 插件：点左下角「插头」图标 → Serial Monitor）
 
-正常应该看到：
+正常应该看到（这是本机实测输出）：
 
 ```
-[BOOT ] fw=week1-1.2 board=ESP32-S3-EYE dev=g01-s3eye
+[BOOT ] fw=week1-1.5 board=ESP32-S3-EYE dev=g01-s3eye
 [I2C  ] 扫描到 1 个设备: 0x12
-[IMU  ] 命中 QMA7981 @0x12（只有三轴加速度，无陀螺仪）  ±2g / 4096 LSB/g
-[WIFI ] 已连接  ip=192.168.1.30  rssi=-52 dBm
-[TIME ] NTP 对准，板端 UTC = 1760000000
-[READY] 开始采样，服务端 = http://192.168.1.100:8080/api/ingest
-[DATA ] #1 accel=(0.011,-0.022,0.999)g mag=1.0032g  gyro=n/a  -> HTTP 201 (ok=1)
+[IMU  ] 命中 QMA6100P @0x12（只有三轴加速度，无陀螺仪）  ±2g / 4096 LSB/g
+[CAL  ] 样本 100：均值=(+0.1355,+0.2914,-0.9041) g  原始 |a|=0.9595 g  波动 0.0258 g
+[CAL  ] ✅ 校准完成：增益=1.04221（0.9595 g → 1.0000 g）
+[READY] 【离线模式】只读传感器 + 串口打印：不连 WiFi、不校时、不上报
+[DATA] #1  x=+0.146  y=+0.283  z=-0.902 g   |a|=0.9975 g   roll=+160.8  pitch=  -1.5 deg   静止
+[DATA] #2  x=+0.144  y=+0.286  z=-0.905 g   |a|=0.9971 g   ...
+[STAT] 最近 10 条：|a| 最小 0.9966  最大 1.0016  平均 0.9988 g
 ```
 
 **退出 monitor**：按 `Ctrl + ]`（不是 Ctrl+C）。
 
-> 💡 更省事：`python ../tools/read_serial.py -p COM4 -s 16`
-> 它会先给板子发硬复位信号，然后抓 16 秒日志自动退出，能把从 `[BOOT]` 开始的完整开机日志都抓到。
+> 💡 更省事：`python ../tools/read_serial.py -p COM4 --watch`（实时刷）或 `-s 16`（抓 16 秒）。
+
+### ⚠️ 串口一片黑？只有 `boot:0x22 (DOWNLOAD...)`？
+
+这是 **ESP32-S3 原生 USB 的经典坑**，本工程踩过：芯片被顶进了**下载模式**。
+
+- 原因：`DTR/RTS` 是**低有效**信号（`True`=0V），分别接 **GPIO0(BOOT)** 和 **EN(复位)**，
+  而 pyserial 打开串口默认两条线都置 `True` = "GPIO0 拉低 + 复位"。
+- 更麻烦：**USB-JTAG 的复位不一定能重新采样启动引脚**，所以进了下载模式后，
+  用 DTR/RTS 怎么复位都回不来（官方文档明确提到）。
+- 解法：**做一次完整复位**：
+
+```bash
+python ../tools/board_reset.py -p COM4     # 一秒恢复，实测有效
+python ../tools/board_status.py -p COM4    # 只是想看看现在是什么启动模式
+```
+
+兜底：按一下板子上的 **RST** 键，或拔插一次 USB（确认 BOOT 键没有被按住/卡住）。
 
 > 💡 **第一次跑，建议先用离线模式**：`config.h` 里 `ENABLE_UPLOAD = 0`，
 > 不联网、不校时、不上报，串口直接出真实数值。跑通了再改成 `1` 上服务器。
