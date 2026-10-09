@@ -1,18 +1,29 @@
 @echo off
 chcp 936 >nul
-title 板子数据 → 网页（关掉本窗口即停止）
+title 看板子网页（关掉本窗口 = 停止搬运）
 echo.
-echo   ==================================================
-echo    正在启动： 服务端 + 串口桥接 + 浏览器
+echo   ==============================================================
+echo     ESP32-S3-EYE 传感器数据  =^>  网页看板
 echo.
-echo    1) 板子插好，串口号默认 COM4
-echo    2) 浏览器会自动打开 http://127.0.0.1:8080
-echo    3) 页面每 1.5 秒自动刷新，显示板子的真实读数
+echo     1) 自动把板子恢复成"正在跑固件"的状态
+echo     2) 启动服务端 + 打开浏览器 + 把串口数据搬上网页
 echo.
-echo    停止： 关掉本窗口，或在窗口里按 Ctrl+C
-echo   ==================================================
+echo     看完直接关掉本窗口即可（浏览器可以留着）
+echo   ==============================================================
 echo.
-"C:\Users\user\.workbuddy\binaries\python\envs\default\Scripts\python.exe" "%~dp0tools\serial_bridge.py" -p COM4 --with-server --open
+
+set "PY=C:\Users\user\.workbuddy\binaries\python\envs\default\Scripts\python.exe"
+set "ROOT=%~dp0"
+
+echo   [1/3] 检查板子状态，必要时做一次完整复位 ...
+"%PY%" "%ROOT%tools\board_reset.py" -p COM4 --quiet
 echo.
-echo   已停止。按任意键关闭本窗口。
+
+echo   [2/3] 启动服务端 + 打开网页（第一次打开可能等两三秒）...
+echo   [3/3] 开始搬运数据（看到 "# ... -^> HTTP 201" 就是在正常上报）
+echo.
+"%PY%" -u "%ROOT%tools\serial_bridge.py" -p COM4 --with-server --open
+
+echo.
+echo   已停止搬运。按任意键关闭本窗口。
 pause >nul

@@ -19,6 +19,13 @@
     # 桥 30 秒就停（方便快速验证）
     python tools/serial_bridge.py -p COM4 --seconds 30
 
+遇到"串口一个字都没有"：先跑一次
+    python tools/board_reset.py -p COM4
+它会用完整复位（watchdog reset）把板子从下载模式拉回"跑固件"状态。
+
+本脚本对串口掉线是容错的：板子复位/USB 重新枚举时不会崩，
+会等设备回来再自动接上继续搬数据。
+
 依赖：pyserial（pip install pyserial）
 """
 import argparse
@@ -61,14 +68,29 @@ def release_port(ser):
     """
     只关串口 —— 千万不要在这里手动 setDTR/setRTS。
 
-    ESP32-S3 走的是原生 USB（USB-Serial/JTAG），DTR/RTS 在芯片内部直连
-    EN 和 GPIO0：随便动一下就可能把板子复位进**下载模式**（表现：串口一个字都不输出，
-    得重新烧录或拔插 USB 才能恢复）。打开/关闭串口时保持默认电平最安全。
+    ESP32-S3 走的是原生 USB（USB-Serial/JTAG），DTR/RTS 是**低有效**信号且直连
+    GPIO0(BOOT) 和 EN：随便动一下就可能把板子顶进**下载模式**（表现：串口只有一个
+    `boot:0x22 (DOWNLOAD...)`，之后一个字都不输出，看着像死机）。
+    关闭时什么都不做最安全。恢复办法见 tools/board_reset.py。
     """
+    if ser is None:
+        return
     try:
         ser.close()
     except Exception:                                          # noqa: BLE001
         pass
+
+
+def open_serial(port, baud):
+    """打开串口 —— 打开前就把 DTR/RTS 设成低电平（GPIO0 高），避免顶进下载模式"""
+    ser = serial.Serial()
+    ser.port = port
+    ser.baudrate = baud
+    ser.timeout = 0.2
+    ser.dtr = False
+    ser.rts = False
+    ser.open()
+    return ser
 
 
 def find_node():
@@ -154,13 +176,7 @@ def main():
     if args.open:
         webbrowser.open(args.server)
 
-    try:
-        ser = serial.Serial(args.port, args.baud, timeout=0.2)
-    except Exception as exc:                                   # noqa: BLE001
-        if srv_proc:
-            srv_proc.terminate()
-        sys.exit(f'打不开 {args.port}：{exc}\n'
-                 f'提示：确认串口号，并关掉 watch.bat / 串口监视器等占用它的程序。')
+    ser = None
 
     device_id = args.device
     fw = 'unknown'
@@ -180,7 +196,28 @@ def main():
     buf = b''
     try:
         while deadline is None or time.time() < deadline:
-            chunk = ser.read(4096)
+            # 串口还没拿到（刚开机 / 板子正在复位）就等一下再用
+            if ser is None:
+                try:
+                    ser = open_serial(args.port, args.baud)
+                    print(f'# 已连接 {args.port}，开始搬运数据')
+                except Exception as exc:                       # noqa: BLE001
+                    print(f'# 等待串口 {args.port} 可用 …（{exc}）')
+                    time.sleep(1.0)
+                    continue
+
+            try:
+                chunk = ser.read(4096)
+            except Exception as exc:                           # noqa: BLE001
+                # ESP32-S3 原生 USB 一旦复位，当前句柄立刻失效，
+                # Windows 会抛 ClearCommError/PermissionError。
+                # 这里不退出，丢掉旧句柄等设备重新枚举后自动接上。
+                print(f'# 串口中断（{exc}），等待设备重新接入 …')
+                release_port(ser)
+                ser = None
+                time.sleep(1.0)
+                continue
+
             if not chunk:
                 continue
             buf += chunk
