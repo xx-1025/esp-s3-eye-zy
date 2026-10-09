@@ -90,3 +90,24 @@ git clone git@github-xx1025:xx-1025/esp-s3-eye-zy.git
 # 新机器上要么把 ~/.ssh/config 里那段别名规则也加上，
 # 要么直接用 ssh.github.com:443 的等价写法
 ```
+
+## 已知小问题（本机特有，不影响推送）
+
+`git status` 有时会显示 `## main...origin/main [gone]`。
+原因是这台机器上 **git 自己写 `refs/remotes/origin/main` 落不了盘**
+（`git fetch` 明明报告 `[new branch] main -> origin/main`，但那个文件随即消失），
+手动写文件反而能持久。
+
+**这只是显示问题，不影响推送**。要核对远端到底有没有推上去，用这个：
+
+```bash
+git ls-remote origin          # 直接问远端，最可靠
+```
+
+想让 `git status` 显示正常，可以手动补一下（远端 SHA 换成 `ls-remote` 查到的）：
+
+```bash
+mkdir -p .git/refs/remotes/origin
+git ls-remote origin | awk '/refs\/heads\/main/{print $1}' > .git/refs/remotes/origin/main
+```
+
