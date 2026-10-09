@@ -26,13 +26,21 @@ esp32-sensor-web/
 │   ├── server.js                 零依赖 Node 服务（接收/落盘/查询/静态托管）
 │   └── data/records.ndjson       运行后自动生成：一行一条原始记录，append-only
 ├── web/index.html                展示页面（单文件，无外部依赖）
+├── watch.bat                     ★ 双击：实时看板子读数（串口文字，看完 Ctrl+C）
+├── 看板子网页.bat                ★ 双击：服务端 + 串口桥接 + 浏览器，一路到网页
 ├── tools/
 │   ├── simulate_device.js        模拟设备（联调用，数据是假的，不可当证据）
 │   ├── smoke_test.js             服务端全链路冒烟测试（28 项断言）
-│   └── page_check.js             页面静态自检（不需要浏览器）
+│   ├── page_check.js             页面静态自检（不需要浏览器）
+│   ├── read_serial.py            读串口日志（--watch 实时监控）
+│   ├── record_csv.py             把串口 [DATA] 录成 CSV → samples/（交作业用）
+│   ├── serial_bridge.py          串口 → HTTP 桥接（板子不联网也能喂数据给网页）
+│   └── cpp_lint.js               固件结构自检（没有编译器时也能查括号/引号配平）
+├── samples/                      record_csv.py 的输出目录（自动创建）
 ├── deploy/
 │   ├── sensor-web.service        systemd 单元
 │   └── nginx-sensor-web.conf     可选：域名 + HTTPS 反代
+├── docs/FLASH.md                 烧录手把手手册（装工具链 → 进下载模式 → 排错）
 └── .gitignore
 ```
 
@@ -60,6 +68,125 @@ node tools/simulate_device.js --device g01-s3eye --count 60
 ```
 
 刷新页面：数值、曲线、原始记录表都会动起来。清理假数据：删掉 `server/data/records.ndjson` 即可。
+
+---
+
+## 1.5 先跑通板端：离线模式（**推荐第一步**）
+
+整条链路里最容易出问题的是网络（WiFi 名字/频率/服务器地址），而"传感器有没有真的读到数"
+根本不需要网络。所以固件有两种模式，由 `config.h` 里的一个开关控制：
+
+```c
+#define ENABLE_UPLOAD      0     // 0=离线模式（默认）  1=联网上传
+#define ENABLE_AUTO_CALIB  1     // 开机静止自动校准（建议开）
+```
+
+**离线模式（`0`）**：不连 WiFi、不做 NTP 校时、不发 HTTP，只做一件事 ——
+每秒读一次真实传感器并把数值打到串口。没有网络也能跑，是验证"真实传感源"最短的路径。
+
+```bash
+cd firmware
+pio run -e esp32s3eye -t upload --upload-port COM4     # 换成你的串口
+python ../tools/read_serial.py -p COM4 -s 16
+```
+
+实测输出：
+
+```
+[BOOT ] fw=week1-1.5 board=ESP32-S3-EYE dev=g01-s3eye
+[I2C  ] 扫描到 1 个设备: 0x12
+[IMU  ] 命中 QMA6100P @0x12（只有三轴加速度，无陀螺仪）  ±2g / 4096 LSB/g
+[CAL  ] 样本 100：均值=(+0.1355,+0.2914,-0.9041) g  原始 |a|=0.9595 g  波动 0.0258 g
+[CAL  ] ✅ 校准完成：增益=1.04221（0.9595 g → 1.0000 g），静止时 |a| 应稳定在 1.000 g 附近
+[READY] 【离线模式】只读传感器 + 串口打印：不连 WiFi、不校时、不上报
+[DATA] #1  x=+0.140  y=+0.303  z=-0.940 g   |a|=0.9975 g   roll=+162.2  pitch=  -8.1 deg   静止 (|a|≈1g，可直接当基准比对)
+[DATA] #2  x=+0.142  y=+0.303  z=-0.939 g   |a|=0.9971 g   roll=+162.1  pitch=  -8.2 deg   静止 (|a|≈1g，可直接当基准比对)
+...
+[STAT] 最近 10 条：|a| 最小 0.9966  最大 1.0016  平均 0.9988 g
+```
+
+### 怎么看板子跑成什么样
+
+| 方式 | 命令 | 说明 |
+|---|---|---|
+| **双击**（最省事） | 双击工程根目录的 `watch.bat` | 弹出黑窗口，每秒刷一条真实读数；看完按 `Ctrl+C`，再按任意键关窗 |
+| 实时监控 | `python tools/read_serial.py -p COM4 --watch` | 一直打印到 `Ctrl+C` |
+| 抓开机日志 | 先跑 `--watch`，再按一下板子上的 **RST** 键 | 从 `[BOOT]` 开始完整抓 |
+| **录成 CSV**（交作业用） | `python tools/record_csv.py -p COM4 -s 30` | 录 30 秒 → `samples/board_<时间>.csv` |
+
+> ⚠️ **别用代码做"软复位"。** ESP32-S3 走的是原生 USB（USB-Serial/JTAG），DTR/RTS 在芯片内部
+> 直连 EN 和 GPIO0。网上常见的那套复位时序（`DTR 拉低 → RTS 拉高`）是给 USB-UART 板子用的，
+> 对 S3 会把芯片**顶进下载模式** —— 之后串口一个字都不输出，得重烧固件或拔插 USB 才能恢复。
+> 本工程所有脚本都已避开这个操作；要复位就按板子上的 RST 键。
+
+CSV 列：`seq, x_g, y_g, z_g, mag_g, roll_deg, pitch_deg, state, pc_time`，
+可直接当"一条真实观测对应记录"提交。（`--watch` 可一直录到 `Ctrl+C`，已录部分自动保留。）
+
+**怎么判读**：
+
+| 看什么 | 说明 |
+|---|---|
+| `x/y/z` | 三轴分量（单位 g）。板子翻面时对应轴的正负号会翻转 |
+| `\|a\|` 合矢量 | **静止时恒等于 1 g**（与朝向无关，最适合当堂比对）。开机校准后稳定在 1.000 附近（实测 0.997~1.004） |
+| `[CAL]` | 开机自动校准日志。增益就是这颗芯片的偏差补偿（例 1.0422 = 没校准时 `\|a\|` 偏低 4.2%） |
+| `roll/pitch` | 用重力方向反推的倾角（静态才准）。加速度计**测不出偏航角 yaw**，那是陀螺仪的活 |
+| `静止/有运动` | `\|a\|` 偏离 1 g 超过 0.05 就提示"有运动" |
+
+**按键**：短按 `BOOT(GPIO0)` 暂停/恢复采样；**长按 ≥1.2 秒**重新做静止校准（板子挪了位置、或读数明显漂了时用）。
+
+**最短验证闭环**：板子平放静止 → `|a| ≈ 1.000 g`；把板子翻个面 → 某个轴变号，但 `|a|` 还是 ≈1 g；
+用手晃一下 → `|a|` 明显偏离 1 g。这三下做完，"真实传感源 + 单位 + 时基"就都证明了。
+
+离线模式跑通后，再把 `ENABLE_UPLOAD` 改成 `1`、填好 WiFi 和服务器地址，重新烧录即可进入全部功能。
+
+---
+
+## 1.6 用网页看板子数据（板子暂时不联网也能看）
+
+板子还在离线模式（WiFi 没通），但服务端和网页都是现成的 —— 加一个**串口桥接**把两边接上：
+
+```
+板子 --串口--> tools/serial_bridge.py --HTTP POST /api/ingest--> server.js --> 网页
+```
+
+**板子固件一行都不用改。** 等 WiFi 通了，把 `ENABLE_UPLOAD` 改成 `1`，板子就能自己直传，
+这个桥接脚本就可以退休（它只是"临时替板子跑网络那一半"）。
+
+### 方式一：双击（推荐）
+
+双击工程根目录的 **`看板子网页.bat`**，它会自动：
+
+1. 起服务端（`server.js`，端口 8080）
+2. 打开浏览器到 `http://127.0.0.1:8080`
+3. 读 COM4 并把数据灌进去（**窗口保持开着**，关掉即停止）
+
+> ⚠️ 桥接必须在前台窗口跑（它要独占串口）。所以别关那个黑窗口。
+
+### 方式二：命令行
+
+```bash
+python tools/serial_bridge.py -p COM4 --with-server --open   # 一条命令全搞定
+python tools/serial_bridge.py -p COM4                        # 只桥接，服务端要自己先起
+python tools/serial_bridge.py -p COM4 --seconds 30           # 桥 30 秒就停
+```
+
+桥接启动时会**自动复位一次板子**，好从 `[BOOT]` 行里读到真实的 `device_id` / `fw` / 传感器型号
+
+
+### 页面上会多出什么
+
+- 元信息区新增 **「数据链路」** 一行：桥接时显示 `串口桥接（板端暂未联网）`，板子直传时显示 `板端 WiFi 直传`
+- 桥接模式下，时间那一栏的标题会变成 **「时间（桥接端电脑，板端未校时）」** —— 免得被当成板端 NTP 时间
+- 其余照旧：最新值 / 三轴 / 合矢量 / 折线图 / 底部原始记录表
+
+### 桥接模式要留意
+
+| 项 | 说明 |
+|---|---|
+| 时间来源 | 板端没校时，`ts_device` 用的是**电脑收到的那一刻**，并标记 `ts_source=bridge_pc` |
+| 数据真伪 | 数值全部来自串口里的真实读数，桥接只搬运、不改数值 |
+| 证据文件 | `server/data/records.ndjson`，一行一条，`cat` 出来就能核对 |
+| 停止之后 | 页面显示"数据迟滞/未更新"，但保留最后一次观测 —— 正是停采演示要的效果 |
 
 ---
 
@@ -139,23 +266,28 @@ cd firmware
 #      DEVICE_TOKEN                     → 必须和服务端一致
 #      DEVICE_ID                        → 全班唯一，例如 g03-s3eye
 
-# 2) 编译 + 烧录 + 看日志
-pio run -e esp32s3eye -t upload
-pio device monitor -e esp32s3eye -b 115200
+# 2) 编译 + 烧录
+pio run -e esp32s3eye -t upload --upload-port COM4    # COM4 换成你的串口
+
+# 3) 看日志（三选一）
+python ../tools/read_serial.py -p COM4 --watch        # 实时监控，Ctrl+C 退出
+python ../tools/read_serial.py -p COM4 -s 20  # 复位后抓完整开机日志
+pio device monitor -e esp32s3eye -b 115200            # 也可以用 PlatformIO 自带的
 ```
 
 **串口日志应该长这样**（这段日志本身就是"认识设备"环节的产物）：
 
 ```
-[BOOT ] fw=week1-1.1 board=ESP32-S3-EYE dev=g01-s3eye
+[BOOT ] fw=week1-1.5 board=ESP32-S3-EYE dev=g01-s3eye
 [I2C  ] 扫描到 1 个设备: 0x12
-[IMU  ] 命中 QMA7981（三轴加速度计，无陀螺仪）  ±2g / 4096 LSB/g
+[IMU  ] 命中 QMA6100P @0x12（只有三轴加速度，无陀螺仪）  ±2g / 4096 LSB/g
 [WIFI ] 正在连接 ssid="myap" ...
 [WIFI ] 已连接  ip=192.168.1.30  rssi=-52 dBm
 [TIME ] NTP 对准，板端 UTC = 1760000000
-[READY] 开始采样，服务端 = http://192.168.1.100:8080/api/ingest
-[DATA ] #1 accel=(0.011,-0.022,0.999)g mag=1.0032g  gyro=n/a  -> HTTP 201 (ok=1)
-[DATA ] #2 accel=(0.014,-0.019,1.001)g mag=1.0031g  gyro=n/a  -> HTTP 201 (ok=2)
+[CAL  ] ✅ 校准完成：增益=1.04221（0.9595 g → 1.0000 g）
+[READY] 【联网模式】开始采样并上报，服务端 = http://192.168.1.100:8080/api/ingest
+[POST ] #1 accel=(0.140,0.303,-0.940)g mag=0.9975g  gyro=n/a  -> HTTP 201 (ok=1)
+[POST ] #2 accel=(0.142,0.303,-0.939)g mag=0.9971g  gyro=n/a  -> HTTP 201 (ok=2)
 ```
 
 **识别不到 IMU 时**固件不会造假数据，而是每 5 秒重扫一次 I2C 并打印排查提示 —— 方便你边插线边看结果。
@@ -295,7 +427,7 @@ sudo ufw allow 8080/tcp
 ```bash
 cd firmware
 pio run -e diag -t upload --upload-port COM4     # 换成你的串口
-python ../tools/read_serial.py -p COM4 -s 18 --reset
+python ../tools/read_serial.py -p COM4 -s 18
 ```
 
 它会拿 **100kHz 和 400kHz 两个速度**各扫一遍（用来排除"线太长/上拉不够"导致的时序问题），
@@ -313,7 +445,7 @@ python ../tools/read_serial.py -p COM4 -s 18 --reset
 
 ```bash
 pio run -e wifiscan -t upload --upload-port COM4
-python ../tools/read_serial.py -p COM4 -s 20 --reset
+python ../tools/read_serial.py -p COM4 -s 20
 ```
 
 输出示例（实测）：

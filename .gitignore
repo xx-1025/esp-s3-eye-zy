@@ -10,6 +10,10 @@ server/data/
 server/node_modules/
 *.log
 
+# ---------- Python ----------
+__pycache__/
+*.pyc
+
 # ---------- 系统 ----------
 .DS_Store
 Thumbs.db

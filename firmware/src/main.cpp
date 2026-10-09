@@ -21,19 +21,25 @@
  *         - ADXL345      @0x53            外接三轴加速度计
  *      识别不到就明确报警 + 打印探针表 + 每 5 秒重试，方便排查接线 —— 不做假数据兜底
  *   4) 核对单位与时基：上报带 unit( g / dps )、ts_device(UTC秒)、uptime_ms
- *   5) 停采演示：短按 BOOT(GPIO0) 暂停/恢复采样，页面会自己提示"未更新"
+ *   5) 停采演示：短按 BOOT(GPIO0) 暂停/恢复采样，页面会自己提示"未更新"；长按 ≥1.2s 重新静止校准
  *
  *  6) 两种运行模式（config.h 里的 ENABLE_UPLOAD）：
  *       =0 离线模式：只读传感器 + 串口打印，不联网、不校时、不上报 —— 先用这个跑通
  *       =1 联网模式：连 WiFi → NTP 校时 → HTTP POST 上报
+ *  7) 静止自动校准（config.h 里的 ENABLE_AUTO_CALIB，默认开）：
+ *       开机静止采 100 个样本求均值，把 |a| 归一到 1.0000 g，消除芯片零点/灵敏度误差；
+ *       板子挪位置不用重校，读数漂了就长按 BOOT ≥1.2 秒重校。
  *
- *  串口输出样例（离线模式，本组实测）：
- *      [BOOT ] fw=week1-1.4 board=ESP32-S3-EYE dev=g01-s3eye
+ *  串口输出样例（离线模式 + 自动校准，本组实测）：
+ *      [BOOT ] fw=week1-1.5 board=ESP32-S3-EYE dev=g01-s3eye
  *      [I2C  ] 扫描到 1 个设备: 0x12
  *      [IMU  ] 命中 QMA6100P @0x12（只有三轴加速度，无陀螺仪）  ±2g / 4096 LSB/g
+ *      [CAL  ] 静止校准中：请勿移动板子（约 0.5 秒）...
+ *      [CAL  ] 样本 100：均值=(+0.145,+0.288,-0.899) g  原始 |a|=0.9556 g  波动 0.0078 g
+ *      [CAL  ] ✅ 校准完成：增益=1.04646（0.9556 g → 1.0000 g），静止时 |a| 应稳定在 1.000 g 附近
  *      [READY] 【离线模式】只读传感器 + 串口打印：不连 WiFi、不校时、不上报
- *      [DATA] #1  x=+0.012  y=-0.021  z=+0.999 g   |a|=1.0024 g   roll=  +1.2  pitch=  -0.7 deg   静止 (|a|≈1g，可直接当基准比对)
- *      [STAT] 最近 10 条：|a| 最小 1.0012  最大 1.0043  平均 1.0027 g
+ *      [DATA] #1  x=+0.152  y=+0.301  z=-0.941 g   |a|=1.0000 g   roll=+162.3  pitch=  -9.1 deg   静止 (|a|≈1g，可直接当基准比对)
+ *      [STAT] 最近 10 条：|a| 最小 0.9987  最大 1.0015  平均 1.0001 g
  * ============================================================================
  */
 
@@ -55,6 +61,11 @@
 //   ENABLE_UPLOAD = 0 → 离线模式：只读传感器 + 串口打印，不联网、不校时、不上报
 #ifndef ENABLE_UPLOAD
 #define ENABLE_UPLOAD 1
+#endif
+
+// 静止自动校准开关（在 config.h 里定义；没定义时默认开启）
+#ifndef ENABLE_AUTO_CALIB
+#define ENABLE_AUTO_CALIB 1
 #endif
 
 // ============================ 传感器类型 ============================
@@ -99,6 +110,10 @@ static uint32_t g_failCount    = 0;
 static bool     g_buttonPrev   = true;
 static uint32_t g_buttonDownMs = 0;
 static ImuSample g_last;
+
+// 静止校准系数（readImu 里要用，故声明在这里）
+static float g_calibGain = 1.0f;    // 三轴统一缩放因子
+static bool  g_calibOk   = false;   // 是否已完成校准
 
 // 最近一次 I2C 扫描结果（供探针诊断复用）
 static uint8_t g_scanAddrs[16];
@@ -484,9 +499,82 @@ static bool readImu(ImuSample &s) {
       return false;
   }
 
+  // 应用静止校准（三轴统一缩放，不改变读数方向）
+  if (g_calibOk) {
+    s.ax *= g_calibGain;
+    s.ay *= g_calibGain;
+    s.az *= g_calibGain;
+  }
+
   s.accelMag = sqrtf(s.ax * s.ax + s.ay * s.ay + s.az * s.az);
   s.gyroMag  = s.gyroValid ? sqrtf(s.gx * s.gx + s.gy * s.gy + s.gz * s.gz) : 0.0f;
   return true;
+}
+
+// ============================ 静止自动校准 ============================
+// MEMS 加速度计有出厂零点/灵敏度误差，静止时 |a| 常常不是标准 1.000 g。
+// 做法：开机后让板子静止，采 N 个样本求均值向量 → 得到一个比例因子，
+//       使静止时 |a| 归一到 1.0000 g（三轴统一缩放，不改变读数方向）。
+// 为什么用"比例"而不是"逐轴零点"：单次静止观测只能解出"模长"这一个约束，
+//       逐轴零点需要多姿态数据（六面法）。比例校准对"当堂核对 |a|≈1g"最有效。
+static void calibrateStatic() {
+  const int   WARMUP   = 30;              // 上电初期总线/寄存器未就绪，先丢弃这些样本
+  const int   N        = 100;             // 用于统计的样本数
+  const float GAIN_OLD = g_calibGain;     // 旧系数，用来把读数还原成"原始模长"
+
+  double sx = 0, sy = 0, sz = 0;
+  float mn = 1e9f, mx = -1e9f;
+  int good = 0;
+
+  logTag("CAL ", "静止校准中：请勿移动板子（约 %.1f 秒）...", (WARMUP + N) * 5.0f / 1000.0f);
+
+  for (int i = 0; i < WARMUP; i++) {      // 预热轮：读但不计入统计
+    ImuSample s;
+    readImu(s);
+    delay(5);
+  }
+
+  for (int i = 0; i < N; i++) {
+    ImuSample s;
+    if (readImu(s)) {
+      float rawMag = s.accelMag / GAIN_OLD;                  // 还原该样本的原始模长
+      if (rawMag < 0.5f || rawMag > 1.5f) { delay(5); continue; }  // 剔除毛刺/垃圾样本
+      sx += s.ax; sy += s.ay; sz += s.az;
+      if (rawMag < mn) mn = rawMag;
+      if (rawMag > mx) mx = rawMag;
+      good++;
+    }
+    delay(5);
+  }
+
+  if (good < N * 3 / 5) {
+    logTag("CAL ", "❌ 校准失败：有效样本太少（%d/%d），沿用原系数 %.5f；检查传感器是否松动",
+           good, N, g_calibGain);
+    return;
+  }
+
+  // readImu 已把旧系数算进去了，所以读到的 mag 是"缩放后"的模长；
+  // 还原出原始模长再给出新的绝对系数 —— 这样反复校准也不会累积漂移。
+  float ax = sx / good, ay = sy / good, az = sz / good;
+  float mag     = sqrtf(ax * ax + ay * ay + az * az);
+  float rawMag  = mag / GAIN_OLD;      // 未经校准的原始模长
+  float spread  = mx - mn;
+
+  logTag("CAL ", "样本 %d：均值=(%+.4f,%+.4f,%+.4f) g  原始 |a|=%.4f g  波动 %.4f g",
+         good, ax, ay, az, rawMag, spread);
+
+  if (rawMag < 0.5f || rawMag > 1.5f) {
+    logTag("CAL ", "❌ 校准失败：原始 |a|=%.4f g 明显异常，检查传感器是否故障/松动", rawMag);
+    return;
+  }
+  if (spread > 0.10f) {
+    logTag("CAL ", "⚠️  校准时板子在动（波动 %.4f > 0.10 g），结果可能不准；放稳后长按 BOOT 重校", spread);
+  }
+
+  g_calibGain = GAIN_OLD / mag;        // 使 原始模长 × 新系数 = 1.0000
+  g_calibOk   = true;
+  logTag("CAL ", "✅ 校准完成：增益=%.5f（%.4f g → 1.0000 g），静止时 |a| 应稳定在 1.000 g 附近",
+         g_calibGain, rawMag);
 }
 
 // ============================ 网络（仅联网模式编译）============================
@@ -595,10 +683,15 @@ static void pollButton() {
   bool now = digitalRead(BUTTON_PIN);        // 按下 = LOW
   if (g_buttonPrev && !now) g_buttonDownMs = millis();
   if (!g_buttonPrev && now) {                // 松开沿
-    if (millis() - g_buttonDownMs > 40) {    // 简易消抖
-      g_sampling = !g_sampling;
-      if (g_sampling) logTag("PAUSE", "采样已恢复");
-      else logTag("PAUSE", "采样已暂停（旧记录保留，页面应提示\"数据未更新\"）");
+    uint32_t held = millis() - g_buttonDownMs;
+    if (held > 40) {                         // 简易消抖
+      if (held >= 1200) {
+        calibrateStatic();                   // 长按 ≥1.2 秒：重新做静止校准
+      } else {
+        g_sampling = !g_sampling;
+        if (g_sampling) logTag("PAUSE", "采样已恢复");
+        else logTag("PAUSE", "采样已暂停（旧记录保留，页面应提示\"数据未更新\"）");
+      }
     }
   }
   g_buttonPrev = now;
@@ -773,6 +866,12 @@ void setup() {
   scanI2CBus();
   detectImu();
 
+#if ENABLE_AUTO_CALIB
+  if (g_imu.kind != SENSOR_NONE) calibrateStatic();
+#else
+  logTag("CAL ", "自动校准已关闭（config.h 里 ENABLE_AUTO_CALIB=0），使用原始读数");
+#endif
+
 #if ENABLE_UPLOAD
   connectWiFi();
   syncTime();
@@ -781,7 +880,7 @@ void setup() {
   logTag("READY", "【离线模式】只读传感器 + 串口打印：不连 WiFi、不校时、不上报");
   logTag("READY", "  要改成联网上传 → 把 config.h 里的 ENABLE_UPLOAD 改成 1，重新烧录");
 #endif
-  logTag("READY", "短按 BOOT(GPIO%d) 可暂停/恢复采样", BUTTON_PIN);
+  logTag("READY", "按键：短按 BOOT(GPIO%d) 暂停/恢复采样；长按 ≥1.2s 重新静止校准", BUTTON_PIN);
 
   g_lastSampleMs = millis();
   g_lastUploadMs = millis();

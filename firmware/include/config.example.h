@@ -25,7 +25,7 @@
 #define DEVICE_ID          "g01-s3eye"
 
 // ---------- 4. I2C 引脚 ----------
-// ESP32-S3-EYE 板载 IMU（QMA7981）：SDA=GPIO4, SCL=GPIO5  （默认值，不用改）
+// ESP32-S3-EYE 板载 IMU（实测为 QMA6100P，ID=0x90）：SDA=GPIO4, SCL=GPIO5（默认不用改）
 // 若外接带陀螺仪的 IMU（MPU6050/MPU9250/LSM6DS3/QMI8658...）：
 //   挂在 S3-EYE 上 → 仍是 SDA=4, SCL=5（和板载共用一条总线）
 //   挂在通用 ESP32 / ESP-EYE 上 → 改成 SDA=21, SCL=22
@@ -44,8 +44,8 @@
 #define NTP_TZ_OFFSET_SEC  (8 * 3600)   // 仅影响本地时间打印，上报用 UTC 秒
 
 // ---------- 7. 其他 ----------
-#define FW_VERSION         "week1-1.4"
-#define BUTTON_PIN         0            // BOOT 键：短按 开始/暂停 采样
+#define FW_VERSION         "week1-1.5"
+#define BUTTON_PIN         0            // BOOT 键：短按 开始/暂停 采样；长按 ≥1.2s 重新静止校准
 
 // ---------- 8. 运行模式 ----------
 // 0 = 离线模式：只读传感器 + 串口打印。不连 WiFi、不校时、不上报、不依赖任何网络。
@@ -53,3 +53,11 @@
 // 1 = 联网模式：连 WiFi → NTP 校时 → HTTP POST 上报
 //      —— 确认上面 1/2 两项填对了再打开。
 #define ENABLE_UPLOAD      0
+
+// ---------- 9. 静止自动校准 ----------
+// 1 = 开机后先让板子静止，采 100 个样本求均值，算出一个比例因子，
+//     使静止时 |a| 精确落在 1.0000 g（三轴统一缩放，不改变读数方向）。
+//     校准期间板子必须静止（放桌上别碰）；完成后会打印 [CAL] 结果。
+//     换位置不用重校（比例与姿态无关）；读数明显漂了 → 长按 BOOT ≥1.2 秒重校。
+// 0 = 关闭，直接用原始读数
+#define ENABLE_AUTO_CALIB  1

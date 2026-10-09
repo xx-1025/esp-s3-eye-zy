@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="zh-CN" data-page-node-id="jKHB8Oqh3HsWqll9pvTsLM">
+<head data-page-node-id="hNhzDA5aM6ggVuUVgxWX39">
+<meta charset="utf-8" data-page-node-id="jbFpif0eQ7RU3QCCwDPxXn">
+<meta name="viewport" content="width=device-width,initial-scale=1" data-page-node-id="QINAf96ODhLGQYOjY8UX5l">
 <title>IMU 实时数据 · 板端 → VPS → 浏览器</title>
 <style>
   :root{
@@ -71,92 +71,93 @@
   .n-err {display:block;background:rgba(242,85,90,.1); border:1px solid rgba(242,85,90,.3); color:var(--err)}
 </style>
 </head>
-<body>
-<div class="wrap">
+<body data-page-node-id="rfd27aRNOPVpjBDGBaxSS5">
+<div class="wrap" data-page-node-id="dh5CYYObkYANScBTWYMwSV">
 
-  <header>
-    <h1>IMU 实时数据<small>板端 → VPS → 浏览器（本页不做任何改写，只显示服务端收到的原始记录）</small></h1>
-    <div class="controls">
-      <span id="badge" class="badge b-idle"><span class="dot"></span><span id="badgeText">连接中…</span></span>
-      <select id="devSel" title="选择设备"></select>
-      <label class="muted" style="font-size:12px">刷新
-        <input id="ivl" type="number" min="500" step="500" value="1500" style="width:74px">ms
+  <header data-page-node-id="xeW7afYK0HYOeemOilyrHH">
+    <h1 data-page-node-id="eNHHmqpGsk4lr7wQuYdVvP">IMU 实时数据<small data-page-node-id="BzxAyHU0bzO0xrm3EZD6HR">板端 → VPS → 浏览器（本页不做任何改写，只显示服务端收到的原始记录）</small></h1>
+    <div class="controls" data-page-node-id="LE6Jlkj9n7ZviKFofVrLYM">
+      <span id="badge" class="badge b-idle" data-page-node-id="IOcjwS4GjUshhBGykJhOdH"><span class="dot" data-page-node-id="00SUP36QBWFfAWVJDxwz6K"></span><span id="badgeText" data-page-node-id="qJ5iSoZaVbarOFrLs6ayRD">连接中…</span></span>
+      <select id="devSel" title="选择设备" data-page-node-id="rlCmpAVR92rUNeZanKRINQ"></select>
+      <label class="muted" style="font-size:12px" data-page-node-id="KV3Q0Zm8fZHRJL2YNqoDNh">刷新
+        <input id="ivl" type="number" min="500" step="500" value="1500" style="width:74px" data-page-node-id="8KuoEWxNMJzHg4VueGH318">ms
       </label>
     </div>
   </header>
 
-  <div id="notice" class="notice"></div>
+  <div id="notice" class="notice" data-page-node-id="nwTRZCpi0BqZpS5GIWzChc"></div>
 
-  <div class="grid">
+  <div class="grid" data-page-node-id="A2gKbFIUrR5ZITSO7XHIAf">
     <!-- 左：主数值 -->
-    <div class="card">
-      <h2>最新观测值（服务端记录）</h2>
-      <div class="big"><span id="bigVal">--</span><span class="unit" id="bigUnit"></span></div>
-      <div class="bigsub" id="bigSub">等待数据…</div>
+    <div class="card" data-page-node-id="HefRi9qB2dhRW2qOpxE1Lv">
+      <h2 data-page-node-id="YN16FGJ6MMaTZh1r8JO80U">最新观测值（服务端记录）</h2>
+      <div class="big" data-page-node-id="EWr5LSFdaInnI0HwemolMh"><span id="bigVal" data-page-node-id="WW0XTpis8wEukoO50bud3U">--</span><span class="unit" id="bigUnit" data-page-node-id="yqOFeLa2OQtGVQKkTH3C55"></span></div>
+      <div class="bigsub" id="bigSub" data-page-node-id="uJHZH8GLZaIoYNaAa0vKrz">等待数据…</div>
 
-      <table style="margin-top:16px">
-        <tr><th style="width:38%">字段</th><th>值</th></tr>
-        <tr><td>设备 ID</td><td class="mono" id="mDev">--</td></tr>
-        <tr><td>传感器 / 陀螺仪</td><td class="mono" id="mSens">--</td></tr>
-        <tr><td>板端时间 (NTP)</td><td class="mono" id="mTd">--</td></tr>
-        <tr><td>服务端收到时间</td><td class="mono" id="mTs">--</td></tr>
-        <tr><td>数据年龄</td><td class="mono" id="mAge">--</td></tr>
-        <tr><td>序号 / 运行时长</td><td class="mono" id="mSeq">--</td></tr>
-        <tr><td>MAC / 信号</td><td class="mono" id="mMac">--</td></tr>
-        <tr><td>来源 IP / 固件</td><td class="mono" id="mIp">--</td></tr>
+      <table style="margin-top:16px" data-page-node-id="xJAoVCC93vry6urqEsQzP3">
+        <tr data-page-node-id="0wSEphmm3jno80ItmRsLG0"><th style="width:38%" data-page-node-id="aJsdnDmKz9Ih6tjRHTiFqO">字段</th><th data-page-node-id="wQ4PUL82KVsmYzVSLFbvlF">值</th></tr>
+        <tr data-page-node-id="mg4Zou02BUDdFsoYK2mRZA"><td data-page-node-id="yoiPM51EXZOcl6YRvFVDQS">设备 ID</td><td class="mono" id="mDev" data-page-node-id="5lDI8rYxt9G04Nvjbm7yjq">--</td></tr>
+        <tr data-page-node-id="73w1VXwLsgH9RzTN62WBdN"><td data-page-node-id="vhuzlrGGzLw4hH4qAqWBhr">传感器 / 陀螺仪</td><td class="mono" id="mSens" data-page-node-id="P7B2z6FbEDiNzfKXEID8mu">--</td></tr>
+        <tr data-page-node-id="ulB7su2GzyFU3rmDskjnmi"><td data-page-node-id="0cbKiYBE0NfcK2q0Kmjhxb">数据链路</td><td class="mono" id="mVia" data-page-node-id="dTbrhDxvf2jcDuWKB0rnNs">--</td></tr>
+        <tr data-page-node-id="NmCKRLFkeHtUQH5sJCYinj"><td id="mTdLabel" data-page-node-id="tWm9xEmV1WDCWtQkL27oB7">板端时间 (NTP)</td><td class="mono" id="mTd" data-page-node-id="Kq47q3XKkzXWDgzMVroEaJ">--</td></tr>
+        <tr data-page-node-id="tAtyxHoqCNLbXkoZnbZjwC"><td data-page-node-id="Jvr7vNMMth50ChbbR9mdoC">服务端收到时间</td><td class="mono" id="mTs" data-page-node-id="nXidya8FTRkzF47zcGdalT">--</td></tr>
+        <tr data-page-node-id="txohnNXbhFFbC42WZVbD4I"><td data-page-node-id="wfSRYBkVGFReA7URIcHRkh">数据年龄</td><td class="mono" id="mAge" data-page-node-id="AaWzcz0VHcCWEW0DvGDMTm">--</td></tr>
+        <tr data-page-node-id="0eyQoulmXoCFyBPzrJuA54"><td data-page-node-id="nqarq6N1TTQrBMvlM9RFvH">序号 / 运行时长</td><td class="mono" id="mSeq" data-page-node-id="CQtqZkI88kmaw5bPUfZr7l">--</td></tr>
+        <tr data-page-node-id="D5UmHAB1OZJhAIm95Ue9BV"><td data-page-node-id="UxC56wfw4IAPCC05bhqLLB">MAC / 信号</td><td class="mono" id="mMac" data-page-node-id="U0HH0XW3yvHxtEdxBzP8EE">--</td></tr>
+        <tr data-page-node-id="jyhuwnQAskajE7DwF7ZhJd"><td data-page-node-id="ABKiGRgHqu7dAbUieEKpMn">来源 IP / 固件</td><td class="mono" id="mIp" data-page-node-id="7xL8JW2dsHU4d06ymn7q60">--</td></tr>
       </table>
     </div>
 
     <!-- 右：六轴 -->
-    <div class="card">
-      <h2>六轴分量</h2>
-      <table>
-        <tr><th>轴</th><th style="text-align:right">加速度 (g)</th><th style="text-align:right">角速度 (dps)</th></tr>
-        <tr><td class="axis-x">X</td><td class="num" id="axX">--</td><td class="num" id="gxX">--</td></tr>
-        <tr><td class="axis-y">Y</td><td class="num" id="axY">--</td><td class="num" id="gxY">--</td></tr>
-        <tr><td class="axis-z">Z</td><td class="num" id="axZ">--</td><td class="num" id="gxZ">--</td></tr>
-        <tr><td class="muted">合矢量 |·|</td><td class="num" id="axM">--</td><td class="num" id="gxM">--</td></tr>
+    <div class="card" data-page-node-id="hmHm3HAEotj8K98RRaEmdA">
+      <h2 data-page-node-id="3GBPGNxpaz6XzZf3eSpENP">六轴分量</h2>
+      <table data-page-node-id="0d0kb1n1F7XDbOseedmXDi">
+        <tr data-page-node-id="lH0MjDWDkOzRgzpHqZbSG9"><th data-page-node-id="xdlMYqJ3s3eAjWWGKTKEze">轴</th><th style="text-align:right" data-page-node-id="S8uZH9WAX9pisoGLbFyDYM">加速度 (g)</th><th style="text-align:right" data-page-node-id="zPcCkselvQO8raQFt3HzWN">角速度 (dps)</th></tr>
+        <tr data-page-node-id="Q9sjwTyrdjZjtBkra2waB0"><td class="axis-x" data-page-node-id="cLpaEfDMflaYmEwi8fC4XR">X</td><td class="num" id="axX" data-page-node-id="gwcUjAGLp9lo1fBPoOVmXU">--</td><td class="num" id="gxX" data-page-node-id="pUw7jgnDIrfRYLOtZkOqyF">--</td></tr>
+        <tr data-page-node-id="LOKJfSueMvGWfZm6baYQJ6"><td class="axis-y" data-page-node-id="9opuwGUqblylAIR1GjQkxI">Y</td><td class="num" id="axY" data-page-node-id="DElHcb5kPc24yKOLLhSg37">--</td><td class="num" id="gxY" data-page-node-id="HddRB3WtnUFJ8zKodEolWZ">--</td></tr>
+        <tr data-page-node-id="7kmUzAURsSLM8Gi231qQDf"><td class="axis-z" data-page-node-id="yOsExpgWlSvIIXBPHUQkJr">Z</td><td class="num" id="axZ" data-page-node-id="qP82X0nuyCWK6lVbTRreUQ">--</td><td class="num" id="gxZ" data-page-node-id="5eIriLmd9rrDPiMklUnQHu">--</td></tr>
+        <tr data-page-node-id="PY0FFjRX0G8y8KOMCDGbVz"><td class="muted" data-page-node-id="vGqpioy9pzO6qi07pUJ67l">合矢量 |·|</td><td class="num" id="axM" data-page-node-id="9szYq616usCHHtaSEcSyIR">--</td><td class="num" id="gxM" data-page-node-id="TJrkVzjo7IdeEwHNzHNJzn">--</td></tr>
       </table>
-      <div class="foot" style="margin-top:14px">
-        <b class="muted">核对方法：</b>板子平放静止时，加速度合矢量应 ≈ <b>1.000 g</b>，X/Y ≈ 0；
-        陀螺仪三个轴应 ≈ <b>0 dps</b>；转动板子时陀螺仪会立刻出现明显读数。
+      <div class="foot" style="margin-top:14px" data-page-node-id="jxKg5A7ObxWF3Iiayqrksc">
+        <b class="muted" data-page-node-id="8AoCp2ijoN4OsiJqPq3Cpy">核对方法：</b>板子平放静止时，加速度合矢量应 ≈ <b data-page-node-id="xVPR6BXwhCG7WMYK4LWQP4">1.000 g</b>，X/Y ≈ 0；
+        陀螺仪三个轴应 ≈ <b data-page-node-id="eA7o3Vix4t3Y1Ew7oY4Liw">0 dps</b>；转动板子时陀螺仪会立刻出现明显读数。
         若你的板载 IMU 无陀螺仪（如 ESP32-S3-EYE 的 QMA7981），右列会显示 n/a。
       </div>
     </div>
   </div>
 
   <!-- 曲线 -->
-  <div class="card" style="margin-top:14px">
-    <h2>最近 120 条记录曲线</h2>
-    <div class="chartbar" id="chips"></div>
-    <canvas id="cv"></canvas>
-    <div class="foot">横轴 = 记录序号（时间从左到右），纵轴 = 所选指标。停采后曲线会停止延伸，右侧数值保留不变。</div>
+  <div class="card" style="margin-top:14px" data-page-node-id="IyEX7DWBW77R7GGBEeVHt7">
+    <h2 data-page-node-id="Jtzr4QorkVU8UxKbk67C0x">最近 120 条记录曲线</h2>
+    <div class="chartbar" id="chips" data-page-node-id="MjeG2oRqZcl2G9Kyo7Mx5E"></div>
+    <canvas id="cv" data-page-node-id="m11parYFrSXUstJwpkzYyI"></canvas>
+    <div class="foot" data-page-node-id="OMSZRgLAdoY5QgeJtExPou">横轴 = 记录序号（时间从左到右），纵轴 = 所选指标。停采后曲线会停止延伸，右侧数值保留不变。</div>
   </div>
 
   <!-- 原始记录 -->
-  <div class="card" style="margin-top:14px">
-    <h2>原始记录（服务端 NDJSON 最后 8 条，用于证明页面未写死数值）</h2>
-    <div style="overflow:auto">
-      <table>
-        <thead><tr>
-          <th>server_iso</th><th>device_id</th><th>seq</th><th>metric</th>
-          <th style="text-align:right">value</th><th>unit</th>
-          <th style="text-align:right">accel x/y/z</th><th style="text-align:right">gyro x/y/z</th>
-          <th>ts_device</th><th>src_ip</th>
+  <div class="card" style="margin-top:14px" data-page-node-id="cH6frlwwCgm9wpUt4U52CS">
+    <h2 data-page-node-id="uY10KM2pbPndgEFAZYNYfE">原始记录（服务端 NDJSON 最后 8 条，用于证明页面未写死数值）</h2>
+    <div style="overflow:auto" data-page-node-id="I3fcQI6Z6Ynf71WGaFfwLW">
+      <table data-page-node-id="H2AExE9MxUMAFmqoU8pgjR">
+        <thead data-page-node-id="ZXfRYTF4KISMyZ2VZDWwS1"><tr data-page-node-id="v6oAofWWAI6i0jBBqx73Ls">
+          <th data-page-node-id="kh046vVN1a2wRE9b0yW5uE">server_iso</th><th data-page-node-id="ujZq9e9O2UCbDqlH3zgn5R">device_id</th><th data-page-node-id="BCUuzPjMpwTL8xXJ3S64YU">seq</th><th data-page-node-id="AEdsY5QjubcdjGmLiBAWGx">metric</th>
+          <th style="text-align:right" data-page-node-id="98vgxmvIDtfeC1KKUNT0WY">value</th><th data-page-node-id="5caV6RgyqSNXfBAoxAI81O">unit</th>
+          <th style="text-align:right" data-page-node-id="J6ul8DTtTjDyvKBAZav5ep">accel x/y/z</th><th style="text-align:right" data-page-node-id="ysCjTaRR0tso5ZjmjMbQPo">gyro x/y/z</th>
+          <th data-page-node-id="XKLQ4PGG7WauZdnbWjs2kE">ts_device</th><th data-page-node-id="PFo4JCsEY6AHEE9w9jlbsE">src_ip</th>
         </tr></thead>
-        <tbody id="rawBody"><tr><td colspan="10" class="muted">暂无记录</td></tr></tbody>
+        <tbody id="rawBody" data-page-node-id="wbvbLH4Js3m5ArEZNENwdg"><tr data-page-node-id="op1BktXKGSagCPlZ6n6k58"><td colspan="10" class="muted" data-page-node-id="XjsFDqNybwhYyNl88i211G">暂无记录</td></tr></tbody>
       </table>
     </div>
-    <div class="foot" style="margin-top:12px">
-      <span class="tag">GET /api/health</span><a href="/api/health" target="_blank">服务状态</a>
-      <span class="tag" style="margin-left:12px">GET /api/history?device=&lt;id&gt;</span><a href="#" id="lnkHist">原始 JSON</a>
-      <span class="tag" style="margin-left:12px">GET /api/export.csv</span><a href="#" id="lnkCsv">导出 CSV</a>
+    <div class="foot" style="margin-top:12px" data-page-node-id="PLDDFIqSggTbyPPM8bmi7U">
+      <span class="tag" data-page-node-id="iOTApeauLgiwHYBVKyIASL">GET /api/health</span><a href="/api/health" target="_blank" data-page-node-id="OPRiDEzjGDjTJQDuWK25Cq">服务状态</a>
+      <span class="tag" style="margin-left:12px" data-page-node-id="gQbUfjfjxPKHBp4Eu3BcQR">GET /api/history?device=&lt;id&gt;</span><a href="#" id="lnkHist" data-page-node-id="smL5EEbq2YWRyrF4Rrw1YQ">原始 JSON</a>
+      <span class="tag" style="margin-left:12px" data-page-node-id="BJK33gwHoPXjlprmovc4xv">GET /api/export.csv</span><a href="#" id="lnkCsv" data-page-node-id="Jg2LW0LoIaN25f6UjfHRE0">导出 CSV</a>
     </div>
   </div>
 
-  <div class="foot">
-    数据链路：ESP32 采样 → HTTP POST <span class="mono">/api/ingest</span>（带 X-Device-Token）
-    → 服务端落盘 <span class="mono">server/data/records.ndjson</span> → 本页只读展示。
+  <div class="foot" data-page-node-id="yXiplsd6cavFcWd5yhwwhE">
+    数据链路：ESP32 采样 → HTTP POST <span class="mono" data-page-node-id="lDvL5oTzph3omCpZZN7uye">/api/ingest</span>（带 X-Device-Token）
+    → 服务端落盘 <span class="mono" data-page-node-id="iBsVEKbPiTQdRtiCwNEdm0">server/data/records.ndjson</span> → 本页只读展示。
     页面上的每一个数字都直接来自接口返回，没有任何硬编码。
   </div>
 </div>
@@ -329,6 +330,12 @@
     // 元信息
     $('mDev').textContent = rec ? (rec.device_id || '--') : '--';
     $('mSens').textContent = rec ? ((rec.sensor || '--') + (rec.has_gyro ? '（含陀螺仪）' : '（无陀螺仪）')) : '--';
+    var viaBridge = !!(rec && rec.via === 'serial-bridge');
+    $('mVia').textContent = rec
+      ? (viaBridge ? '串口桥接（板端暂未联网）' : '板端 WiFi 直传')
+      : '--';
+    $('mTdLabel').textContent = viaBridge
+      ? '时间（桥接端电脑，板端未校时）' : '板端时间 (NTP)';
     $('mTd').textContent = rec ? epochTime(rec.ts_device) : '--';
     $('mTs').textContent = rec ? localTime(rec.server_ts_ms) : '--';
     $('mAge').textContent = rec ? humanAge(latest.age_ms) : '--';

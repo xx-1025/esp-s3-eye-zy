@@ -159,6 +159,12 @@ pio device monitor -e esp32s3eye -b 115200
 
 **退出 monitor**：按 `Ctrl + ]`（不是 Ctrl+C）。
 
+> 💡 更省事：`python ../tools/read_serial.py -p COM4 -s 16`
+> 它会先给板子发硬复位信号，然后抓 16 秒日志自动退出，能把从 `[BOOT]` 开始的完整开机日志都抓到。
+
+> 💡 **第一次跑，建议先用离线模式**：`config.h` 里 `ENABLE_UPLOAD = 0`，
+> 不联网、不校时、不上报，串口直接出真实数值。跑通了再改成 `1` 上服务器。
+
 ### 三种日志分别说明什么
 
 | 看到的 | 说明 | 下一步 |
